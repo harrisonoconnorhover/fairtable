@@ -18,8 +18,9 @@ Workspace and backup formats are unchanged. Existing personal-edition features i
 - TypeScript compilation, 32 unit tests and formatting passed.
 - All 17 Chrome workflow tests passed, including nine new regressions for the changes above. Existing coverage includes browser persistence, reciprocal links, calculated fields, CSV/backup restoration, mobile viewport behavior and a 10,000-row × 30-field import/edit/reload.
 - The production Rust/WASM and browser build passed; bundled dependency notices were regenerated.
+- Actual downloaded Apple Silicon and browser archives matched their published SHA-256 checksums. The downloaded native executable reported 0.1.1; embedded UI/WASM/notices matched the browser ZIP, and saved/exported workspace data survived process restart.
 
-The browser tool blocked opening the local preview during this pass, so no new manual visual inspection is claimed. Mobile checks use Chrome viewport emulation; physical iOS/Safari remains untested. Cross-platform binaries publish only after release CI completes its native tests and packaged-server startup/persistence checks; consult [the release runs](https://github.com/harrisonoconnorhover/fairtable/actions/workflows/release.yml) for their results.
+The browser tool blocked opening the local preview during this pass, so no new manual visual inspection is claimed. Mobile checks use Chrome viewport emulation; physical iOS/Safari remains untested. [Release CI](https://github.com/harrisonoconnorhover/fairtable/actions/runs/38439217852) passed browser/Rust checks and native tests, packaging, startup and persistence checks on Linux and macOS, each on Intel/AMD and ARM architectures. All ten expected archives/checksum files are published.
 
 ## Install and scope
 
