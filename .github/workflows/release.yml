@@ -1,0 +1,113 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    uses: ./.github/workflows/ci.yml
+
+  native:
+    name: Package ${{ matrix.target }}
+    needs: checks
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+          - runner: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+          - runner: macos-15-intel
+            target: x86_64-apple-darwin
+          - runner: macos-15
+            target: aarch64-apple-darwin
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+      - run: rustup toolchain install 1.95.0 --profile minimal
+      - name: Check tag and native architecture
+        env:
+          EXPECTED_TARGET: ${{ matrix.target }}
+        run: |
+          test "$(rustc -vV | sed -n 's/^host: //p')" = "$EXPECTED_TARGET"
+          test "$GITHUB_REF_NAME" = "v$(node -p 'JSON.parse(require("fs").readFileSync("package.json", "utf8")).version')"
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: web-dist
+          path: dist/
+      - run: cargo test --workspace --locked
+      - run: ./scripts/package-release.sh --built-assets
+      - name: Start the packaged executable
+        run: |
+          mkdir -p "$RUNNER_TEMP/fairtable-release"
+          tar -xzf artifacts/releases/*.tar.gz -C "$RUNNER_TEMP/fairtable-release"
+          executables=("$RUNNER_TEMP"/fairtable-release/*/fairtable)
+          FAIRTABLE_DATA="$RUNNER_TEMP/fairtable-smoke.sqlite3" FAIRTABLE_PORT=7788 "${executables[0]}" > "$RUNNER_TEMP/fairtable-smoke.log" 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          for _attempt in $(seq 1 30); do
+            if curl --silent --fail http://127.0.0.1:7788/api/health > "$RUNNER_TEMP/fairtable-health.json"; then break; fi
+            sleep 1
+          done
+          node -e 'const h=JSON.parse(require("fs").readFileSync(process.env.RUNNER_TEMP+"/fairtable-health.json","utf8")); if(h.name!=="Fairtable"||h.storage!=="sqlite")throw Error("Unexpected health response")'
+          curl --fail http://127.0.0.1:7788/ | grep -q 'id="root"'
+          curl --fail http://127.0.0.1:7788/THIRD_PARTY_NOTICES.txt > /dev/null
+          curl --fail --header 'Content-Type: application/json' --request PUT --data '{"revision":0,"workspace":{"version":1,"name":"Release smoke","bases":[]}}' http://127.0.0.1:7788/api/workspace
+          kill "$server_pid"
+          wait "$server_pid"
+          FAIRTABLE_DATA="$RUNNER_TEMP/fairtable-smoke.sqlite3" FAIRTABLE_PORT=7788 "${executables[0]}" > "$RUNNER_TEMP/fairtable-smoke.log" 2>&1 &
+          server_pid=$!
+          for _attempt in $(seq 1 30); do
+            if curl --silent --fail http://127.0.0.1:7788/api/workspace > "$RUNNER_TEMP/fairtable-workspace.json"; then break; fi
+            sleep 1
+          done
+          node -e 'const s=JSON.parse(require("fs").readFileSync(process.env.RUNNER_TEMP+"/fairtable-workspace.json","utf8")); if(s.revision!==1||s.workspace.name!=="Release smoke")throw Error("Restart did not preserve workspace")'
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: native-${{ matrix.target }}
+          path: artifacts/releases/*
+          if-no-files-found: error
+
+  publish:
+    needs: native
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: native-*
+          path: artifacts/releases/
+          merge-multiple: true
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: web-dist
+          path: dist/
+      - name: Package browser edition
+        run: |
+          archive="fairtable-${GITHUB_REF_NAME#v}-web.zip"
+          (cd dist && zip -r "../artifacts/releases/$archive" .)
+          (cd artifacts/releases && sha256sum "$archive" > "$archive.sha256")
+      - name: Publish checked release archives
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cat > "$RUNNER_TEMP/release-notes.md" <<'EOF'
+          Fairtable personal edition: an independent, MIT-licensed relational spreadsheet with a Rust calculation engine.
+
+          Extract a native archive and run `./fairtable`, then open http://127.0.0.1:7777. The web interface and SQLite are included. Native Linux builds target glibc 2.39 or later. macOS builds are unsigned and not notarized. The `web.zip` contains a browser-only build for a static HTTP(S) server; its data stays in that browser profile.
+
+          The personal server has no login: use an authenticated HTTPS reverse proxy for remote access. Team collaboration, shared forms, attachments, and complete Airtable formula/API compatibility are outside this release. Read the repository README for data backup, installation, and hosting instructions.
+
+          These files were published after Rust checks, browser workflow tests, native architecture tests, and packaged-server persistence smoke checks. Checksums accompany each archive. Developed with AI assistance; implementation provenance is documented in the repository.
+          EOF
+          gh release create "$GITHUB_REF_NAME" artifacts/releases/* --verify-tag --title "Fairtable $GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/release-notes.md"

@@ -1,0 +1,39 @@
+{
+  "name": "fairtable",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 --port 5177",
+    "build:wasm": "node scripts/build-wasm.mjs",
+    "build": "npm run build:wasm && tsc -b && vite build",
+    "build:web": "tsc -b && vite build",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "check": "tsc -b && vitest run",
+    "preview": "vite preview --host 127.0.0.1 --port 5177",
+    "format": "prettier --write web tests *.ts *.json",
+    "format:check": "prettier --check web tests *.ts *.json"
+  },
+  "dependencies": {
+    "@tanstack/react-virtual": "3.13.12",
+    "lucide-react": "0.468.0",
+    "papaparse": "5.5.3",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.0",
+    "@types/node": "^22.0.0",
+    "@types/papaparse": "^5.3.16",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^6.0.0",
+    "prettier": "3.6.2",
+    "typescript": "^5.9.3",
+    "vite": "8.3.4",
+    "vitest": "^4.0.0"
+  },
+  "packageManager": "pnpm@11.25.0"
+}
