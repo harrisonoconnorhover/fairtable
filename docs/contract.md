@@ -35,7 +35,7 @@ Rust crate exports public `validate_workspace(&serde_json::Value) -> Result<(), 
 WASM exports via wasm-bindgen 0.2.108: `validate(json: &str) -> Result<(), JsValue>` and `evaluate(json: &str) -> Result<String, JsValue>`. Expose under a `wasm` feature so server has no web dependency.
 
 Rust server HTTP contract:
-- `GET /api/health` -> `{name:"Fairtable",version:"0.1.0",storage:"sqlite"}`.
+- `GET /api/health` -> `{name:"Fairtable",version:"0.1.1",storage:"sqlite"}` (version follows the installed release).
 - `GET /api/workspace` -> `{revision:number,workspace:Workspace|null}` (null for fresh store).
 - `PUT /api/workspace` JSON `{revision:number,workspace:Workspace}` -> `{revision:number}`; conflict is HTTP409 with `{error:string,revision:number}`. Validate through core before atomic persistence.
 - `GET /api/history` -> `[{id:number,createdAt:string,label:string}]`, newest first, up to 30 snapshots.

@@ -22,6 +22,7 @@ import { CellDisplay, CellInput, cellText, parseCellText } from "./CellInput";
 import {
   FIELD_TYPES,
   isComputed,
+  newRow,
   type Cell,
   type CellChange,
   type Evaluation,
@@ -40,6 +41,8 @@ interface GridProps {
   workspace: Workspace;
   evaluation: Evaluation;
   onChangeCells: (changes: CellChange[]) => void;
+  onPasteCells: (changes: CellChange[], addedRows: Row[]) => void;
+  canExtendRows: boolean;
   onAddRecord: () => void;
   onOpenRecord: (id: string) => void;
   onEditField: (id: string) => void;
@@ -64,6 +67,8 @@ export function Grid({
   workspace,
   evaluation,
   onChangeCells,
+  onPasteCells,
+  canExtendRows,
   onAddRecord,
   onOpenRecord,
   onEditField,
@@ -247,6 +252,47 @@ export function Grid({
       }
     }
     setEditing(null);
+    if (
+      (direction === "next" && row >= orderedRecords.length) ||
+      (direction === "previous" && row < 0)
+    ) {
+      const grid = scroll.current;
+      if (!grid) return;
+      const candidates = [
+        ...document.querySelectorAll<HTMLElement>(
+          "a[href],button,input,select,textarea,summary,[tabindex]",
+        ),
+      ].filter(
+        (element) =>
+          element.tabIndex >= 0 &&
+          !grid.contains(element) &&
+          !element.matches(":disabled") &&
+          !element.closest("[inert],[hidden]") &&
+          (!element.closest("details:not([open])") ||
+            !!element
+              .closest("details:not([open])")!
+              .querySelector("summary")
+              ?.contains(element)) &&
+          getComputedStyle(element).visibility !== "hidden" &&
+          element.getClientRects().length > 0,
+      );
+      const target =
+        direction === "next"
+          ? candidates.find(
+              (element) =>
+                grid.compareDocumentPosition(element) &
+                Node.DOCUMENT_POSITION_FOLLOWING,
+            )
+          : candidates
+              .reverse()
+              .find(
+                (element) =>
+                  grid.compareDocumentPosition(element) &
+                  Node.DOCUMENT_POSITION_PRECEDING,
+              );
+      target?.focus();
+      return;
+    }
     move({ row, col });
     focusGrid();
   }
@@ -460,15 +506,21 @@ export function Grid({
       const rows = oneCell ? range.bottom - range.top + 1 : data.length;
       const cols = oneCell ? range.right - range.left + 1 : columnCount;
       const start = { row: range.top, col: range.left };
-      if (start.row + rows > orderedRecords.length)
+      const additionalRows = Math.max(
+        0,
+        start.row + rows - orderedRecords.length,
+      );
+      if (additionalRows && !canExtendRows)
         throw new Error(
-          `Paste needs ${start.row + rows - orderedRecords.length} more records. Add records first, then paste again.`,
+          "To paste new records, clear search, filters, sorting, and grouping first. You can still paste into existing visible records.",
         );
       if (start.col + cols > fields.length)
         throw new Error(
           "Paste extends past the last visible field. Add or show the required fields first.",
         );
       const changes: CellChange[] = [];
+      const addedRows = Array.from({ length: additionalRows }, () => newRow());
+      const targetRecords = [...orderedRecords, ...addedRows];
       let skipped = 0;
       for (let row = 0; row < rows; row++)
         for (let col = 0; col < cols; col++) {
@@ -478,7 +530,7 @@ export function Grid({
             continue;
           }
           changes.push({
-            recordId: orderedRecords[start.row + row].id,
+            recordId: targetRecords[start.row + row].id,
             fieldId: field.id,
             value: parseCellText(
               field,
@@ -487,13 +539,13 @@ export function Grid({
             ),
           });
         }
-      if (change(changes)) {
-        setAnchor(start);
-        setActive({ row: start.row + rows - 1, col: start.col + cols - 1 });
-        setNotice(
-          `Pasted ${changes.length} cell${changes.length === 1 ? "" : "s"}${skipped ? `; ${skipped} calculated cell${skipped === 1 ? "" : "s"} preserved` : ""}.`,
-        );
-      }
+      if (changes.length || addedRows.length) onPasteCells(changes, addedRows);
+      setError("");
+      setAnchor(start);
+      setActive({ row: start.row + rows - 1, col: start.col + cols - 1 });
+      setNotice(
+        `Pasted ${changes.length} cell${changes.length === 1 ? "" : "s"}${addedRows.length ? `; added ${addedRows.length} record${addedRows.length === 1 ? "" : "s"}` : ""}${skipped ? `; ${skipped} calculated cell${skipped === 1 ? "" : "s"} preserved` : ""}.`,
+      );
     } catch (cause) {
       setError(
         `Nothing was pasted. ${cause instanceof Error ? cause.message : String(cause)}`,

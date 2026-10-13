@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Check, ChevronDown, Search, X } from "lucide-react";
 import { isComputed, type Cell, type Field, type Workspace } from "../types";
@@ -265,6 +265,7 @@ export function CellInput({
     initialText ?? (value == null ? "" : String(value)),
   );
   const [error, setError] = useState("");
+  const errorId = useId();
   const [open, setOpen] = useState(autoFocus);
   const [query, setQuery] = useState(initialText ?? "");
   const [highlight, setHighlight] = useState(0);
@@ -281,8 +282,34 @@ export function CellInput({
   const picker = ["singleSelect", "multiSelect", "link"].includes(field.type);
   const multiple = field.type !== "singleSelect";
 
+  function showError(message: string) {
+    input.current?.setCustomValidity(message);
+    setError(message);
+  }
+  function changeDraft(text: string) {
+    completed.current = false;
+    setDraft(text);
+    let message = "";
+    try {
+      parseCellText(field, text, workspace);
+    } catch (cause) {
+      message = cause instanceof Error ? cause.message : String(cause);
+    }
+    // Forms must see invalid drafts even before blur commits their values.
+    input.current?.setCustomValidity(message);
+    if (error) setError(message);
+  }
+  function cancelDraft() {
+    completed.current = true;
+    setDraft(value == null ? "" : String(value));
+    showError("");
+    onClose?.();
+  }
+
   useEffect(() => {
     setDraft(initialText ?? (value == null ? "" : String(value)));
+    input.current?.setCustomValidity("");
+    setError("");
     completed.current = false;
   }, [value, field.id, initialText]);
   useEffect(() => {
@@ -345,23 +372,27 @@ export function CellInput({
   const save = (next: Cell, finish = true) => {
     try {
       onChange(next);
-      setError("");
+      showError("");
       if (finish) {
         completed.current = true;
         close();
       }
       return true;
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
+      showError(cause instanceof Error ? cause.message : String(cause));
       return false;
     }
   };
   const commit = () => {
     if (completed.current) return true;
+    if (input.current && !input.current.checkValidity()) {
+      setError(input.current.validationMessage);
+      return false;
+    }
     try {
       return save(parseCellText(field, draft, workspace));
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
+      showError(cause instanceof Error ? cause.message : String(cause));
       return false;
     }
   };
@@ -465,23 +496,35 @@ export function CellInput({
                 className="cell-picker"
                 style={position}
                 onPointerDown={(event) => event.stopPropagation()}
+                onBlur={(event) => {
+                  const target = event.relatedTarget as Node | null;
+                  if (
+                    target &&
+                    !event.currentTarget.contains(target) &&
+                    !wrapper.current?.contains(target)
+                  ) {
+                    setOpen(false);
+                    onClose?.();
+                  }
+                }}
                 onKeyDown={(event) => {
                   event.stopPropagation();
+                  const searching = event.target instanceof HTMLInputElement;
                   if (event.key === "Escape") {
                     event.preventDefault();
                     close();
                   }
-                  if (event.key === "ArrowDown") {
+                  if (searching && event.key === "ArrowDown") {
                     event.preventDefault();
                     setHighlight((index) =>
                       Math.min(shown.length - 1, index + 1),
                     );
                   }
-                  if (event.key === "ArrowUp") {
+                  if (searching && event.key === "ArrowUp") {
                     event.preventDefault();
                     setHighlight((index) => Math.max(0, index - 1));
                   }
-                  if (event.key === "Enter") {
+                  if (searching && event.key === "Enter") {
                     event.preventDefault();
                     if (shown[highlight]) choose(shown[highlight]);
                   }
@@ -490,7 +533,7 @@ export function CellInput({
                       event.preventDefault();
                       close();
                       onNavigate(event.shiftKey ? "previous" : "next");
-                    } else close();
+                    }
                   }
                 }}
               >
@@ -573,20 +616,18 @@ export function CellInput({
             input.current = node;
           }}
           aria-label={field.name}
+          aria-invalid={Boolean(error)}
+          aria-describedby={error ? errorId : undefined}
           value={draft}
           rows={compact ? 1 : 4}
-          onChange={(event) => {
-            completed.current = false;
-            setDraft(event.target.value);
-          }}
+          onChange={(event) => changeDraft(event.target.value)}
+          onInvalid={(event) => setError(event.currentTarget.validationMessage)}
           onBlur={commit}
           onKeyDown={(event) => {
             event.stopPropagation();
             if (event.key === "Escape") {
               event.preventDefault();
-              completed.current = true;
-              setDraft(value == null ? "" : String(value));
-              onClose?.();
+              cancelDraft();
             }
             if (
               (event.key === "Enter" &&
@@ -625,19 +666,17 @@ export function CellInput({
               : undefined
           }
           aria-label={field.name}
+          aria-invalid={Boolean(error)}
+          aria-describedby={error ? errorId : undefined}
           value={draft}
-          onChange={(event) => {
-            completed.current = false;
-            setDraft(event.target.value);
-          }}
+          onChange={(event) => changeDraft(event.target.value)}
+          onInvalid={(event) => setError(event.currentTarget.validationMessage)}
           onBlur={commit}
           onKeyDown={(event) => {
             event.stopPropagation();
             if (event.key === "Escape") {
               event.preventDefault();
-              completed.current = true;
-              setDraft(value == null ? "" : String(value));
-              onClose?.();
+              cancelDraft();
             }
             if (event.key === "Enter" || event.key === "Tab") {
               if (event.key === "Enter" || onNavigate) event.preventDefault();
@@ -656,7 +695,7 @@ export function CellInput({
         />
       )}
       {error && !picker && (
-        <div role="alert" className="cell-input-error">
+        <div id={errorId} role="alert" className="cell-input-error">
           {error}
         </div>
       )}

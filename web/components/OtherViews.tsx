@@ -101,16 +101,16 @@ function Board(p: Props) {
       </div>
     );
   const stacks = [
-    { id: "", name: "Unassigned", color: "#e8e9ed" },
+    { id: "", name: `No ${field.name}`, color: "#e8e9ed" },
     ...(field.options ?? []),
   ];
   return (
     <div className="board" aria-label="Kanban board">
       {stacks.map((option) => {
-        const rows = p.records.filter(
-          (row) =>
-            (row.cells[field.id] ?? "") === option.name ||
-            (!option.id && !row.cells[field.id]),
+        const rows = p.records.filter((row) =>
+          option.id
+            ? row.cells[field.id] === option.name
+            : !row.cells[field.id],
         );
         return (
           <section
@@ -318,10 +318,21 @@ function Calendar(p: Props) {
           {p.records.filter((r) => !r.cells[field.id]).length} records without a
           date
         </summary>
+        <p className="hint">
+          Drag a record onto a day to schedule it, or open it to set{" "}
+          {field.name}.
+        </p>
         {p.records
           .filter((r) => !r.cells[field.id])
           .map((row) => (
-            <button key={row.id} onClick={() => p.onOpen(row.id)}>
+            <button
+              key={row.id}
+              onClick={() => p.onOpen(row.id)}
+              draggable
+              onDragStart={(e) =>
+                e.dataTransfer.setData("text/fairtable-record", row.id)
+              }
+            >
               {title(p, row)}
             </button>
           ))}
@@ -361,6 +372,7 @@ function Form(p: Props) {
         className="form-paper"
         onSubmit={(e) => {
           e.preventDefault();
+          if (!e.currentTarget.reportValidity()) return;
           setError("");
           try {
             for (const f of fields.filter((f) =>

@@ -106,7 +106,7 @@ dependencies = [
 
 [[package]]
 name = "fairtable-core"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "serde_json",
  "wasm-bindgen",
@@ -114,7 +114,7 @@ dependencies = [
 
 [[package]]
 name = "fairtable-server"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "axum",
  "fairtable-core",

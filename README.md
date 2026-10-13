@@ -152,7 +152,7 @@ For a proxy deployment, add `-e FAIRTABLE_ORIGIN=https://tables.example.com` and
 
 | Action | Shortcut or control |
 | --- | --- |
-| Move the selected cell | Arrow keys, Tab / Shift+Tab |
+| Move the selected cell | Arrow keys, Tab / Shift+Tab; Tab leaves the grid at its boundaries |
 | Edit | Double-click, Enter, F2, or begin typing |
 | Select a range | Drag across cells or Shift+arrows |
 | Copy / cut / paste | Ctrl/⌘ C, X, V |
@@ -162,7 +162,9 @@ For a proxy deployment, add `-e FAIRTABLE_ORIGIN=https://tables.example.com` and
 | Configure a field | Click its column name |
 | Close an editor/dialog | Escape |
 
-Paste accepts rectangular tab-separated blocks. Add enough records and fields first; a paste extending beyond the table is rejected. Invalid values reject the entire paste, and calculated fields are preserved. A single pasted value can fill a selected range. The first field supplies record names; linked records refer to stable record IDs.
+Paste accepts rectangular tab-separated blocks. In a grid without filters, sorting, grouping, or a search, a paste can add the records it needs; the entire paste is one undoable action. In other views, paste fits the existing visible records. Add or show enough fields first. Invalid values reject the entire paste without adding rows, and calculated fields are preserved. A single pasted value can fill a selected range. The first field supplies record names; linked records refer to stable record IDs.
+
+Select and linked-record pickers support keyboard navigation: arrow keys choose the highlighted search result, Enter selects it, and Escape closes the picker. In record details and forms, Tab reaches option buttons and Clear/Done without changing the selection. Invalid form drafts stay visible and block submission until corrected. Open the calendar's “records without a date” section and drag a record onto a day to schedule it.
 
 Formula references use `{Field name}`, for example `IF({Status} = "Done", {Hours} * 100, 0)`. The engine supports arithmetic, comparisons, string concatenation, `IF`, `AND`, `OR`, `NOT`, `SUM`, `AVERAGE`, `MIN`, `MAX`, `COUNT`, `COUNTA`, `ROUND`, `ABS`, `CONCATENATE`, `UPPER`, `LOWER`, `LEN`, `TRIM`, `LEFT`, `RIGHT`, `YEAR`, `MONTH`, `DAY`, `TODAY`, `TRUE`, `FALSE`, and `BLANK`. Rollups also support `ARRAYJOIN`. This is a defined subset, not Airtable's entire formula language. Errors are shown in calculated cells; invalid formulas can be saved for editing.
 

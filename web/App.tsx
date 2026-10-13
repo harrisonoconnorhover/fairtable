@@ -53,6 +53,7 @@ import {
   type View,
   type Cell,
   type CellChange,
+  type Row,
   type Table,
   type Filter as FilterType,
 } from "./types";
@@ -260,6 +261,15 @@ export default function App({
       (draft) =>
         Object.assign(draft, applyCellChanges(draft, table!.id, changes)),
       changes.length === 1 ? "Edited a cell" : `Edited ${changes.length} cells`,
+    );
+  }
+  function pasteCells(changes: CellChange[], addedRows: Row[]) {
+    mutate(
+      (draft) => {
+        findTable(draft, table!.id)!.records.push(...addedRows);
+        Object.assign(draft, applyCellChanges(draft, table!.id, changes));
+      },
+      `Pasted ${changes.length} cells${addedRows.length ? ` and added ${addedRows.length} records` : ""}`,
     );
   }
   function addRecord(cells: Record<string, Cell> = {}) {
@@ -931,6 +941,13 @@ export default function App({
                       workspace={displayWorkspace}
                       evaluation={evaluation}
                       onChangeCells={changeCells}
+                      onPasteCells={pasteCells}
+                      canExtendRows={
+                        !search &&
+                        view.filters.length === 0 &&
+                        view.sorts.length === 0 &&
+                        !view.groupFieldId
+                      }
                       onAddRecord={() => addRecord()}
                       onOpenRecord={setRecordId}
                       onEditField={(fieldId) =>
